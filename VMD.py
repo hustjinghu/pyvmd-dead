@@ -1,14 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 14 12:59:05 2014
-
-@author: nabobalis
-"""
-
 from __future__ import division
 import numpy as np
 from scipy import fftpack
-import matplotlib.pyplot as plt
 
 def VMD(signal, alpha, tau, K, DC, init, tol):
     """
@@ -46,25 +38,23 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
     """
     ## Preparations
     
-    # Period and sampling frequency of input signal
-    save_t = len(signal)
-    fs = 1/save_t
+    # Sampling frequency of input signal
+    fs = 1/len(signal)
 
     # Extend signal by mirroring
-    T = save_t
-    f_mirror = signal[0:T/2+1][::-1]
-    f_mirror = np.append(f_mirror,signal)
-    f_mirror = np.append(f_mirror, signal[T/2+1:][::-1])
-    f = f_mirror
+    sig_len = len(signal)
+    sig_mirror = signal[:sig_len/2+1][::-1]
+    sig_mirror = np.append(sig_mirror,signal)
+    sig_mirror = np.append(sig_mirror, signal[sig_len/2+1:][::-1])
     
     # Time domain 0 to T (of mirrored signal)
-    T = len(f)
-    t = np.arange(0,T)/T
+    sig_mirr_len = len(sig_mirror)
+    t = np.arange(sig_mirr_len)/sig_mirr_len
     
     # Spectral Domain discretization
-    freqs = (t-0.5)-(1/T)
+    freqs = (t-0.5)-(1/sig_mirr_len)
     
-    # Maxiimum number of iterations (if not converged yet, then it won't anyway!)
+    # Maximum number of iterations (if not converged yet, then it won't anyway!)
     N = 500
     
     # For future generalziations: individual alpha for each mode
@@ -73,7 +63,7 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
     # Contruct and cnter f_hat
     f_hat = fftpack.fftshift(fftpack.fft(f))
     f_hat_plus = f_hat
-    f_hat_plus[0:T/2] = 0
+    f_hat_plus[:T/2] = 0
     
     # Matrix keeping track of every iterant, could be discarded for memory
     u_hat_plus = np.zeros([N, len(freqs),K])
@@ -102,7 +92,7 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
     sum_uk = 0 # accumulator
     
     # Main loop for iterative updates
-    while (uDiff.any() > tol) or (n < N-1): # Not converged and below iterations limit
+    while (uDiff.any() > tol) and (n < N-2): # Not converged and below iterations limit
         #update first mode accumulator
         k = 1
         sum_uk = u_hat_plus[n,:,K-1] + sum_uk - u_hat_plus[n,:,0]
@@ -115,7 +105,7 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
             omega_plus[n,k] = np.dot(freqs[T/2+1:T],(np.abs(u_hat_plus[n, T/2+1:T, k])**2).T) / \
                                  np.sum(np.abs(u_hat_plus[n,T/2+1:T,k])**2)
             
-        for k in range(0,K):
+        for k in range(0,K-1):
             
             # Accumlautor
             sum_uk = u_hat_plus[n,:,k-1] + sum_uk - u_hat_plus[n,:,k]
@@ -136,14 +126,14 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
             
         # Not converged yet?
         uDiff = np.spacing(1)
-        for i in range(0,K):
+        for i in range(0,K-1):
             uDiff = uDiff + 1/T*(u_hat_plus[n,:,i]-u_hat_plus[n-1,:,i])*np.conjugate(u_hat_plus[n,:,i] - u_hat_plus[n-1,:,i]).T 
         uDiff = np.abs(uDiff)
         
     # Postprocessing and cleanup
     
     #Discard empty space if converged early
-    N = np.min(N,n)
+    N = np.min([N,n])
     omega = omega_plus[0:N,:]
     
     # Signal recontruction
@@ -166,36 +156,39 @@ def VMD(signal, alpha, tau, K, DC, init, tol):
         u_hat[:,k] = fftpack.fftshift(fftpack.fft(u[k,:])).T
         
     return u, u_hat, omega
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+        
+    T = 1000
+    fs = 1/T
+    t = np.arange(0,T)/T
+    freqs = 2*np.pi*(t-0.5-1/T)/(fs)
     
-T = 1000
-fs = 1/T
-t = np.arange(0,T)/T
-freqs = 2*np.pi*(t-0.5-1/T)/(fs)
-
-# center frequencies of components
-f_1 = 2
-f_2 = 24
-f_3 = 288
-
-# modes
-v_1 = (np.cos(2*np.pi*f_1*t))
-v_2 = 1/4*(np.cos(2*np.pi*f_2*t))
-v_3 = 1/16*(np.cos(2*np.pi*f_3*t))
-
-# composite signal, including noise
-f = v_1 + v_2 + v_3 + 0.1*np.random.randn(len(v_1))
-f_hat = fftpack.fftshift((fftpack.fft(f)))
-
-# some sample parameters for VMD
-alpha = 2000 # moderate bandwidth constraint
-tau = 0 #noise-tolerance (no strict fidelity enforcement)
-K = 3 # 3 modes
-DC = 0 # no DC part imposed
-init = 1 # initialize omegas uniformly
-tol = 1e-7
-
-#Run actual VMD code
-
-plt.plot(f)
-plt.show()
-u, u_hat, omega = VMD(f, alpha, tau, K, DC, init, tol)
+    # center frequencies of components
+    f_1 = 2
+    f_2 = 24
+    f_3 = 288
+    
+    # modes
+    v_1 = (np.cos(2*np.pi*f_1*t))
+    v_2 = 1/4*(np.cos(2*np.pi*f_2*t))
+    v_3 = 1/16*(np.cos(2*np.pi*f_3*t))
+    
+    # composite signal, including noise
+    f = v_1 + v_2 + v_3 + 0.1*np.random.randn(len(v_1))
+    f_hat = fftpack.fftshift((fftpack.fft(f)))
+    
+    # some sample parameters for VMD
+    alpha = 2000 # moderate bandwidth constraint
+    tau = 0 #noise-tolerance (no strict fidelity enforcement)
+    K = 3 # 3 modes
+    DC = 0 # no DC part imposed
+    init = 1 # initialize omegas uniformly
+    tol = 1e-7
+    
+    #Run actual VMD code
+    
+#    plt.plot(f)
+    #plt.show()
+#    u, u_hat, omega = VMD(f, alpha, tau, K, DC, init, tol)
