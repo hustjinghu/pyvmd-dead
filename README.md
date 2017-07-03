@@ -1,4 +1,4 @@
-# Please not, it does not work right now and needs alot of work.
+# Please do not use, it does not work .
 
 PyVMD
 =====
